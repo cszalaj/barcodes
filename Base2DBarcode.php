@@ -191,6 +191,35 @@ class Base2DBarcode
      *
      * @return string
      */
+    public function getBarcodeTableHTML($code, $type, $w=10, $h=10, $color='#000000')
+    {
+        //set barcode code and type
+        $this->setBarcode($code, $type);
+        $html = '<table cellspacing="0" cellpadding="0" border="0" style="border:none;">' . "\n";
+        // print barcode elements
+        $y = 0;
+        // for each row
+        for ($r = 0; $r < $this->barcodeArray['num_rows']; ++$r) {
+            $html .= '<tr style="font-size:'.$h.';line-height:'.$h.';height:'. $h .'px;border:none;">' . "\n";
+            $x = 0;
+            // for each column
+            for ($c = 0; $c < $this->barcodeArray['num_cols']; ++$c) {
+                if ($this->barcodeArray['bcode'][$r][$c] == 1) {
+                    // draw a single barcode cell
+                     $html .= '<td style="border-collapse:collapse;font-size:'.$h.'px;line-height:'.$h.'px;background-color:'.$color.';width:'.$w.'px;height:'.$h.'px;">&nbsp;</td>'."\n";
+                } else {
+                     $html .= '<td style="border-collapse:collapse;font-size:'.$h.'px;line-height:'.$h.'px;background-color:#ffffff;width:'.$w.'px;height:'.$h.'px;">&nbsp;</td>'."\n";
+                }
+                $x += $w;
+            }
+            $y += $h;
+            $html .= '</tr>' . "\n";
+        }
+        $html .= '</table>' . "\n";
+
+        return $html;
+    }
+
     public function getBarcodeHTML($code, $type, $w=10, $h=10, $color='black')
     {
         //set barcode code and type
