@@ -13,3 +13,4 @@ nbproject/
 atlassian-ide-plugin.xml
 composer.lock
 vendor
+sftp-config.json

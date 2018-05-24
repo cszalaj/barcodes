@@ -35,13 +35,9 @@
 
 namespace BG\Barcode;
 
-include_once('modules/Datamatrix.php');
-include_once('modules/PDF417.php');
 include_once('modules/QRCode.php');
 
-use BG\Barcode\Modules\PDF417,
-    BG\Barcode\Modules\Datamatrix,
-    BG\Barcode\Modules\QRCode;
+use BG\Barcode\Modules\QRCode;
 
 /**
  * class Base2DBarcode 1.0.0, based on 2dbarcodes.php v1.0.013 (Nicola Asuni)
@@ -59,11 +55,6 @@ class Base2DBarcode
      * @protected
      */
     protected $barcodeArray = false;
-    /**
-     * path to save png in getBarcodePNGPath
-     * @var <type>
-     */
-    public $savePath;
 
     /**
      * Return an array representations of barcode.
@@ -91,97 +82,9 @@ class Base2DBarcode
             throw new \Exception("An error occurred while creating barcode cache directory at " . $serverPath);
         }
     }
-
-    /**
-     * get svg brcode (header stream)
-     *
-     * @param string $code
-     * @param string $type
-     * @param int    $w
-     * @param int    $h
-     * @param string $color
-     */
-    public function getBarcodeSVG($code, $type, $w=3, $h=3, $color='black')
-    {
-        //set barcode code and type
-        $this->setBarcode($code, $type);
-        // send headers
-        $code = $this->getBarcodeSVGcode($w, $h, $color);
-        header('Content-Type: application/svg+xml');
-        header('Cache-Control: public, must-revalidate, max-age=0'); // HTTP/1.1
-        header('Pragma: public');
-        header('Expires: Sat, 12 Nov 1977 23:50:00 GMT'); // Date in the past
-        header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
-        header('Content-Disposition: inline; filename="' . md5($code) . '.svg";');
-        //header('Content-Length: '.strlen($code));
-        echo $code;
-    }
-
-    /**
-     * Return a Full Doctype SVG string representation of barcode.
-     *
-     * @param string $code
-     * @param string $type
-     * @param int    $w
-     * @param int    $h
-     * @param string $color
-     *
-     * @return string
-     */
-    public function getBarcodeSVGcode($code, $type, $w=3, $h=3, $color='black')
-    {
-        return '<?xml version="1.0" standalone="no"?>' . "\n"
-             . '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' . "\n"
-             . $this->getRawBarcodeSVGcode($code, $type, $w=3, $h=3, $color='black');
-    }
-
-    /**
-     * Return an inline SVG string representation of barcode.
-     *
-     * @param string $code
-     * @param string $type
-     * @param int    $w
-     * @param int    $h
-     * @param string $color
-     *
-     * @return string
-     */
-    public function getRawBarcodeSVGcode($code, $type, $w=3, $h=3, $color='black')
-    {
-        //set barcode code and type
-        $this->setBarcode($code, $type);
-        // replace table for special characters
-        $repstr = strtr($this->barcodeArray['code'], array("\0" => '', '&' => '&amp;', '<' => '&lt;', '>' => '&gt;'));
-        $tw = round(($this->barcodeArray['num_cols'] * $w), 3);
-        $th = round(($this->barcodeArray['num_cols'] * $h), 3);
-        $svg = "
-          <svg viewBox=\"0 0 $tw $th\" width=\"$tw\" height=\"$th\" version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\">
-          <desc>$repstr</desc>
-          <g id=\"elements\" fill=\"$color\" stroke=\"none\">
-        ";
-        // print barcode elements
-        $y = 0;
-        // for each row
-        for ($r = 0; $r < $this->barcodeArray['num_rows']; ++$r) {
-            $x = 0;
-            // for each column
-            for ($c = 0; $c < $this->barcodeArray['num_cols']; ++$c) {
-                if ($this->barcodeArray['bcode'][$r][$c] == 1) {
-                    // draw a single barcode cell
-                    $svg .= "\t\t" . '<rect x="' . $x . '" y="' . $y . '" width="' . $w . '" height="' . $h . '" />' . "\n";
-                }
-                $x += $w;
-            }
-            $y += $h;
-        }
-        $svg .= "\t" . '</g>' . "\n";
-        $svg .= '</svg>' . "\n";
-
-        return $svg;
-    }
     
     /**
-     * Return an HTML representation of barcode.
+     * Return an HTML Table representation of barcode.
      *
      * @param string $code
      * @param string $type
@@ -220,6 +123,17 @@ class Base2DBarcode
         return $html;
     }
 
+    /**
+     * Return an HTML DIV representation of barcode.
+     *
+     * @param string $code
+     * @param string $type
+     * @param int    $w
+     * @param int    $h
+     * @param string $color
+     *
+     * @return string
+     */
     public function getBarcodeHTML($code, $type, $w=10, $h=10, $color='black')
     {
         //set barcode code and type
@@ -246,181 +160,6 @@ class Base2DBarcode
     }
 
     /**
-     * Return a PNG image representation of barcode (requires GD or Imagick library).
-     *
-     * @param string $code
-     * @param string $type
-     * @param int    $w
-     * @param int    $h
-     * @param array  $color
-     *
-     * @return bool
-     */
-    public function getBarcodePNG($code, $type, $w=3, $h=3, $color=array(0, 0, 0))
-    {
-        //set barcode code and type
-        $this->setBarcode($code, $type);
-        $bar = null;
-
-        // calculate image size
-        $width = ($this->barcodeArray['num_cols'] * $w);
-        $height = ($this->barcodeArray['num_rows'] * $h);
-        if (function_exists('imagecreate')) {
-            // GD library
-            $imagick = false;
-            $png = imagecreate($width, $height);
-            $bgcol = imagecolorallocate($png, 255, 255, 255);
-            imagecolortransparent($png, $bgcol);
-            $fgcol = imagecolorallocate($png, $color[0], $color[1], $color[2]);
-        } elseif (extension_loaded('imagick')) {
-            $imagick = true;
-            $fgcol = new \imagickpixel('rgb(' . $color[0] . ',' . $color[1] . ',' . $color[2] . ')');
-            $png = new \Imagick();
-            $png->newImage($width, $height, 'none', 'png');
-            $bar = new \imagickdraw();
-            $bar->setFillColor($fgcol);
-        } else {
-
-            return false;
-        }
-        // print barcode elements
-        $y = 0;
-        // for each row
-        for ($r = 0; $r < $this->barcodeArray['num_rows']; ++$r) {
-            $x = 0;
-            // for each column
-            for ($c = 0; $c < $this->barcodeArray['num_cols']; ++$c) {
-                if ($this->barcodeArray['bcode'][$r][$c] == 1) {
-                    // draw a single barcode cell
-                    if ($imagick) {
-                        $bar->rectangle($x, $y, ($x + $w), ($y + $h));
-                    } else {
-                        imagefilledrectangle($png, $x, $y, ($x + $w), ($y + $h), $fgcol);
-                    }
-                }
-                $x += $w;
-            }
-            $y += $h;
-        }
-        // send headers
-        header('Content-Type: image/png');
-        header('Cache-Control: public, must-revalidate, max-age=0'); // HTTP/1.1
-        header('Pragma: public');
-        header('Expires: Sat, 12 Nov 1977 23:50:00 GMT'); // Date in the past
-        header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
-        if ($imagick) {
-            $png->drawimage($bar);
-            echo $png;
-        } else {
-            imagepng($png);
-            imagedestroy($png);
-        }
-
-        return true;
-    }
-
-    /**
-     * return filename from give path
-     *
-     * @todo: refactor this, move method in some kind of utility class
-     *
-     * @param string $path
-     *
-     * @return mixed
-     */
-    public function getBarcodeFilenameFromGenPath($path)
-    {
-        $bcPathArr = explode('/', $path);
-        return $bcPathArr[count($bcPathArr)-1];
-    }
-
-    /**
-     * Return a .png file path which create in server
-     *
-     * @param string $code
-     * @param string $type
-     * @param int    $w
-     * @param int    $h
-     * @param array  $color
-     *
-     * @throws \Exception
-     *
-     * @return bool
-     */
-    public function getBarcodePNGPath($code, $type, $name, $w=3, $h=3, $color=array(0, 0, 0))
-    {
-
-        //set barcode code and type
-        $this->setBarcode($code, $type);
-        $bar = null;
-
-        if (empty($this->barcodeArray) || (!$this->barcodeArray)) {
-            throw new \Exception('It not possible to generate barcode of type: '.$type.' for number/code: '.$code.'! May be this is an invalid code pattern!');
-        }
-
-        // calculate image size
-        $width = ($this->barcodeArray['num_cols'] * $w);
-        $height = ($this->barcodeArray['num_rows'] * $h);
-        if (function_exists('imagecreate')) {
-            // GD library
-            $imagick = false;
-            $png = imagecreate($width, $height);
-            $bgcol = imagecolorallocate($png, 255, 255, 255);
-            imagecolortransparent($png, $bgcol);
-            $fgcol = imagecolorallocate($png, $color[0], $color[1], $color[2]);
-        } elseif (extension_loaded('imagick')) {
-            $imagick = true;
-            $fgcol = new \imagickpixel('rgb(' . $color[0] . ',' . $color[1] . ',' . $color[2] . ')');
-            $png = new \Imagick();
-            $png->newImage($width, $height, 'none', 'png');
-            $bar = new \imagickdraw();
-            $bar->setFillColor($fgcol);
-        } else {
-
-            return false;
-        }
-        // print barcode elements
-        $y = 0;
-        // for each row
-        for ($r = 0; $r < $this->barcodeArray['num_rows']; ++$r) {
-            $x = 0;
-            // for each column
-            for ($c = 0; $c < $this->barcodeArray['num_cols']; ++$c) {
-                if ($this->barcodeArray['bcode'][$r][$c] == 1) {
-                    // draw a single barcode cell
-                    if ($imagick) {
-                        $bar->rectangle($x, $y, ($x + $w), ($y + $h));
-                    } else {
-                        imagefilledrectangle($png, $x, $y, ($x + $w), ($y + $h), $fgcol);
-                    }
-                }
-                $x += $w;
-            }
-            $y += $h;
-        }
-
-        $nType = str_replace('+', 'PLUS', $type);
-
-        $this->setTempPath($this->savePath);
-        $saveFile = $this->checkfile($this->savePath . $nType . '_' . $name . '.png', true);
-
-        if ($imagick) {
-            $png->drawImage($bar);
-            $png->writeImage($saveFile);
-            return $saveFile;
-        }
-        // ImagePng : weazL
-        if (imagepng($png, $saveFile)) {
-            imagedestroy($png);
-
-            return $saveFile;
-        } else {
-            imagedestroy($png);
-            throw new \Exception('It not possible to write barcode cache file to path '.$this->savePath);
-        }
-    }
-
-    /**
      * Set the barcode.
      *
      * @param string $code
@@ -431,42 +170,6 @@ class Base2DBarcode
         $mode = explode(',', $type);
         $qrtype = strtoupper($mode[0]);
         switch ($qrtype) {
-            case 'DATAMATRIX': // DATAMATRIX (ISO/IEC 16022)
-                $qrcode = new Datamatrix($code);
-                $this->barcodeArray = $qrcode->getBarcodeArray();
-                $this->barcodeArray['code'] = $code;
-                break;
-
-            case 'PDF417': // PDF417 (ISO/IEC 15438:2006)
-                if (!isset($mode[1]) || ($mode[1] === '')) {
-                    $aspectratio = 2; // default aspect ratio (width / height)
-                } else {
-                    $aspectratio = floatval($mode[1]);
-                }
-                if (!isset($mode[2]) || ($mode[2] === '')) {
-                    $ecl = -1; // default error correction level (auto)
-                } else {
-                    $ecl = intval($mode[2]);
-                }
-                // set macro block
-                $macro = array();
-                if (isset($mode[3]) && ($mode[3] !== '') && isset($mode[4]) && ($mode[4] !== '') && isset($mode[5]) && ($mode[5] !== '')) {
-                    $macro['segment_total'] = intval($mode[3]);
-                    $macro['segment_index'] = intval($mode[4]);
-                    $macro['file_id'] = strtr($mode[5], "\xff", ',');
-                    for ($i = 0; $i < 7; ++$i) {
-                        $o = $i + 6;
-                        if (isset($mode[$o]) && ($mode[$o] !== '')) {
-                            // add option
-                            $macro['option_' . $i] = strtr($mode[$o], "\xff", ',');
-                        }
-                    }
-                }
-                $qrcode = new PDF417($code, $ecl, $aspectratio, $macro);
-                $this->barcodeArray = $qrcode->getBarcodeArray();
-                $this->barcodeArray['code'] = $code;
-                break;
-
             case 'QRCODE': // QR-CODE
                 if (!isset($mode[1]) || (!in_array($mode[1], array('L', 'M', 'Q', 'H')))) {
                     $mode[1] = 'L'; // Ddefault: Low error correction
@@ -504,32 +207,5 @@ class Base2DBarcode
                 $this->barcodeArray = false;
                 break;
         }
-    }
-
-    /**
-     * unlink old barcode image file or optional rand prefix file
-     *
-     * @param string $path
-     * @param bool   $overwrite
-     *
-     * @return mixed
-     */
-    public function checkfile($path, $overwrite)
-    {
-        if (file_exists($path)) {
-
-            if (!$overwrite) {
-                $baseName = pathinfo($path, PATHINFO_BASENAME);
-
-                return $this->checkfile(str_replace($baseName, rand(0, 9999) . $baseName, $path), $overwrite);
-
-            } else {
-
-                unlink($path);
-
-            }
-        }
-
-        return $path;
     }
 }
